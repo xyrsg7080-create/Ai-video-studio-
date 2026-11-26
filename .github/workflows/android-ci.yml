@@ -47,14 +47,15 @@ jobs:
           fi
 
       - name: Restore Optional Google Services Config
-        if: ${{ secrets.GOOGLE_SERVICES_JSON != '' }}
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          if echo "$GOOGLE_SERVICES_JSON" | grep -q '"project_info"'; then
-            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
-          else
-            printf '%s' "$GOOGLE_SERVICES_JSON" | base64 -d > app/google-services.json
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            if echo "$GOOGLE_SERVICES_JSON" | grep -q '"project_info"'; then
+              printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            else
+              printf '%s' "$GOOGLE_SERVICES_JSON" | base64 -d > app/google-services.json
+            fi
           fi
 
       - name: Build Debug APK
