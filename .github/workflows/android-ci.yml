@@ -2,10 +2,11 @@ name: Android CI
 
 on:
   push:
-    branches: [ main, master ]
   pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-and-test:
@@ -21,10 +22,22 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK Licenses
+        run: yes | sdkmanager --licenses >/dev/null || true
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
+
+      - name: Restore Debug Keystore
+        run: |
+          if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          fi
 
       - name: Run Unit & Robolectric Tests
         run: gradle :app:testDebugUnitTest
@@ -32,8 +45,26 @@ jobs:
       - name: Build Debug APK
         run: gradle :app:assembleDebug
 
+      - name: Package APK and ZIP
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk AI_Video_Studio_debug.apk
+          zip -j AI_Video_Studio_APK.zip AI_Video_Studio_debug.apk
+
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ai-video-studio-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            AI_Video_Studio_debug.apk
+            AI_Video_Studio_APK.zip
+
+      - name: Publish APK to GitHub Releases
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest-apk --yes || true
+          gh release create latest-apk AI_Video_Studio_debug.apk AI_Video_Studio_APK.zip \
+            --title "AI Video Studio Latest APK" \
+            --notes "Automated debug APK build. Download AI_Video_Studio_debug.apk or AI_Video_Studio_APK.zip to install on Android."
