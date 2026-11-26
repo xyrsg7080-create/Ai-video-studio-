@@ -73,6 +73,7 @@ import com.example.ui.tools.ThumbnailMakerScreen
 import com.example.ui.tools.VoiceStudioScreen
 import com.example.ui.youtube.UploadSchedulerScreen
 import com.example.ui.youtube.YouTubeStudioScreen
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.launch
@@ -105,7 +106,17 @@ fun StudioRootApp(
     val preferences by studioViewModel.preferences.collectAsStateWithLifecycle()
     val strings = stringsFor(preferences.language)
 
-    var currentUser by remember { mutableStateOf<FirebaseUser?>(FirebaseAuth.getInstance().currentUser) }
+    var currentUser by remember {
+        mutableStateOf<FirebaseUser?>(
+            runCatching {
+                if (FirebaseApp.getApps(context).isNotEmpty()) {
+                    FirebaseAuth.getInstance().currentUser
+                } else {
+                    null
+                }
+            }.getOrNull()
+        )
+    }
     var continueOffline by remember { mutableStateOf(false) }
     var checkedAutoSignIn by remember { mutableStateOf(false) }
 

@@ -67,6 +67,7 @@ import com.example.ui.theme.StudioSurfaceElevated
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
@@ -78,14 +79,38 @@ import kotlinx.coroutines.withContext
 
 private const val TAG = "AuthScreen"
 
+private fun isFirebaseConfigured(context: Context): Boolean {
+    return runCatching {
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context) != null
+        } else {
+            true
+        }
+    }.getOrDefault(false)
+}
+
+private fun resolveDefaultWebClientId(context: Context): String? {
+    val resId = context.resources.getIdentifier(
+        "default_web_client_id",
+        "string",
+        context.packageName
+    )
+    if (resId == 0) return null
+    return runCatching { context.getString(resId) }
+        .getOrNull()
+        ?.takeIf { it.isNotBlank() }
+}
+
 suspend fun attemptAutoSignIn(context: Context): FirebaseUser? {
-    val existing = FirebaseAuth.getInstance().currentUser
+    if (!isFirebaseConfigured(context)) return null
+    val existing = runCatching { FirebaseAuth.getInstance().currentUser }.getOrNull()
     if (existing != null) return existing
+    val webClientId = resolveDefaultWebClientId(context) ?: return null
     return try {
         val credentialManager = CredentialManager.create(context)
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(true)
-            .setServerClientId(context.getString(R.string.default_web_client_id))
+            .setServerClientId(webClientId)
             .setAutoSelectEnabled(true)
             .build()
         val request = GetCredentialRequest.Builder()
@@ -115,7 +140,11 @@ suspend fun signOutFromFirebaseAndCredentials(context: Context) {
         runCatching {
             CredentialManager.create(context).clearCredentialState(ClearCredentialStateRequest())
         }
-        FirebaseAuth.getInstance().signOut()
+        runCatching {
+            if (FirebaseApp.getApps(context).isNotEmpty()) {
+                FirebaseAuth.getInstance().signOut()
+            }
+        }
     }
 }
 
@@ -250,14 +279,21 @@ fun AuthScreen(
             Button(
                 onClick = {
                     if (isSigningIn) return@Button
+                    val webClientId = resolveDefaultWebClientId(context)
+                    if (!isFirebaseConfigured(context) || webClientId == null) {
+                        errorMessage = if (lang == AppLanguage.HINDI) {
+                            "इस APK बिल्ड में क्लाउड साइन-इन कॉन्फ़िगर नहीं है। वीडियो एडिटिंग और MP4 एक्सपोर्ट के लिए नीचे \"ऑफलाइन जारी रखें\" दबाएं।"
+                        } else {
+                            "Google Sign-In is unavailable in this standalone APK build without google-services.json. Tap \"Continue Offline\" below to use all local video creation & export tools."
+                        }
+                        return@Button
+                    }
                     errorMessage = null
                     isSigningIn = true
                     scope.launch {
                         try {
                             val credentialManager = CredentialManager.create(context)
-                            val option = GetSignInWithGoogleOption.Builder(
-                                context.getString(R.string.default_web_client_id)
-                            ).build()
+                            val option = GetSignInWithGoogleOption.Builder(webClientId).build()
                             val req = GetCredentialRequest.Builder()
                                 .addCredentialOption(option)
                                 .build()
