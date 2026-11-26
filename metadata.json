@@ -1,0 +1,6 @@
+{
+  "name": "AI Video Studio",
+  "description": "Full-featured Android video creation studio with AI scripts, storyboards, voiceovers, multi-track timeline editing, Media3 MP4 export, and YouTube publishing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,220 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global Hardened Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidAspectRatio(ar) {
+      return ar in ['9:16', '16:9', '1:1', 'custom'];
+    }
+
+    function isValidLanguage(lang) {
+      return lang in ['en', 'hi'];
+    }
+
+    // 3. Entity Validators
+    function isValidUserStudioProfile(data, userId) {
+      return data.userId == userId &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             isValidLanguage(data.preferredLanguage) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCloudBrandKit(data, userId) {
+      return data.userId == userId &&
+             data.channelName is string && data.channelName.size() >= 1 && data.channelName.size() <= 100 &&
+             data.primaryColorHex is string && data.primaryColorHex.size() >= 4 && data.primaryColorHex.size() <= 12 &&
+             data.accentColorHex is string && data.accentColorHex.size() >= 4 && data.accentColorHex.size() <= 12 &&
+             data.fontFamily is string && data.fontFamily.size() >= 1 && data.fontFamily.size() <= 50 &&
+             data.watermarkText is string && data.watermarkText.size() <= 60 &&
+             data.watermarkEnabled is bool &&
+             isValidAspectRatio(data.defaultAspectRatio) &&
+             data.defaultCaptionStyle is string && data.defaultCaptionStyle.size() >= 1 && data.defaultCaptionStyle.size() <= 40 &&
+             data.applyByDefault is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCloudProjectBackup(data, userId) {
+      return data.userId == userId &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+             data.topic is string && data.topic.size() <= 500 &&
+             isValidAspectRatio(data.aspectRatio) &&
+             data.targetDurationSec is int && data.targetDurationSec >= 5 && data.targetDurationSec <= 3600 &&
+             isValidLanguage(data.languageCode) &&
+             data.scriptHook is string && data.scriptHook.size() <= 2000 &&
+             data.scriptBody is string && data.scriptBody.size() <= 12000 &&
+             data.scriptCta is string && data.scriptCta.size() <= 1000 &&
+             data.sceneSummaries is list && data.sceneSummaries.size() <= 50 &&
+             (data.sceneSummaries.size() == 0 || data.sceneSummaries[0] is string) &&
+             data.seoTitle is string && data.seoTitle.size() <= 140 &&
+             data.seoDescription is string && data.seoDescription.size() <= 5000 &&
+             data.seoTags is list && data.seoTags.size() <= 30 &&
+             (data.seoTags.size() == 0 || data.seoTags[0] is string) &&
+             data.status in ['DRAFT', 'READY', 'EXPORTED', 'UPLOADED'] &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCloudScheduledUpload(data, userId) {
+      return data.userId == userId &&
+             data.projectId is string && data.projectId.size() >= 1 && data.projectId.size() <= 128 &&
+             data.projectTitle is string && data.projectTitle.size() >= 1 && data.projectTitle.size() <= 140 &&
+             data.videoTitle is string && data.videoTitle.size() >= 1 && data.videoTitle.size() <= 100 &&
+             data.visibility in ['private', 'unlisted', 'public'] &&
+             data.scheduledAtMillis is int && data.scheduledAtMillis >= 0 &&
+             data.status in ['QUEUED', 'PAUSED', 'UPLOADING', 'COMPLETED', 'FAILED', 'CANCELLED'] &&
+             (!('youtubeVideoId' in data) || (data.youtubeVideoId is string && data.youtubeVideoId.size() <= 64)) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // 4. Collection Rules
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'preferredLanguage', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'preferredLanguage', 'createdAt', 'updatedAt']) &&
+                       isValidUserStudioProfile(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserStudioProfile(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'preferredLanguage', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /brandKits/{kitId} {
+        allow get: if isOwner(userId) && isValidId(kitId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(kitId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'channelName', 'primaryColorHex', 'accentColorHex',
+                           'fontFamily', 'watermarkText', 'watermarkEnabled', 'defaultAspectRatio',
+                           'defaultCaptionStyle', 'applyByDefault', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'channelName', 'primaryColorHex', 'accentColorHex',
+                           'fontFamily', 'watermarkText', 'watermarkEnabled', 'defaultAspectRatio',
+                           'defaultCaptionStyle', 'applyByDefault', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidCloudBrandKit(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(kitId) &&
+                         isValidCloudBrandKit(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'channelName', 'primaryColorHex', 'accentColorHex',
+                           'fontFamily', 'watermarkText', 'watermarkEnabled', 'defaultAspectRatio',
+                           'defaultCaptionStyle', 'applyByDefault', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(kitId);
+      }
+
+      match /projects/{projectId} {
+        allow get: if isOwner(userId) && isValidId(projectId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(projectId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'title', 'topic', 'aspectRatio', 'targetDurationSec',
+                           'languageCode', 'scriptHook', 'scriptBody', 'scriptCta',
+                           'sceneSummaries', 'seoTitle', 'seoDescription', 'seoTags',
+                           'status', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'title', 'topic', 'aspectRatio', 'targetDurationSec',
+                           'languageCode', 'scriptHook', 'scriptBody', 'scriptCta',
+                           'sceneSummaries', 'seoTitle', 'seoDescription', 'seoTags',
+                           'status', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidCloudProjectBackup(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(projectId) &&
+                         isValidCloudProjectBackup(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'title', 'topic', 'aspectRatio', 'targetDurationSec',
+                           'languageCode', 'scriptHook', 'scriptBody', 'scriptCta',
+                           'sceneSummaries', 'seoTitle', 'seoDescription', 'seoTags',
+                           'status', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(projectId);
+      }
+
+      match /scheduledUploads/{uploadId} {
+        allow get: if isOwner(userId) && isValidId(uploadId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(uploadId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'projectId', 'projectTitle', 'videoTitle',
+                           'visibility', 'scheduledAtMillis', 'status', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'projectId', 'projectTitle', 'videoTitle',
+                           'visibility', 'scheduledAtMillis', 'status', 'youtubeVideoId',
+                           'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidCloudScheduledUpload(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(uploadId) &&
+                         isValidCloudScheduledUpload(incoming(), userId) &&
+                         !(existing().status in ['COMPLETED', 'CANCELLED']) &&
+                         incoming().userId == existing().userId &&
+                         incoming().projectId == existing().projectId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'projectTitle', 'videoTitle', 'visibility', 'scheduledAtMillis',
+                           'status', 'youtubeVideoId', 'updatedAt'
+                         ]);
+
+        allow delete: if isOwner(userId) && isValidId(uploadId);
+      }
+    }
+  }
+}

@@ -1,0 +1,155 @@
+{
+  "entities": {
+    "UserStudioProfile": {
+      "title": "UserStudioProfile",
+      "description": "Authenticated user studio profile and preferences.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Creator display name."
+        },
+        "preferredLanguage": {
+          "type": "string",
+          "enum": ["en", "hi"],
+          "description": "Preferred UI and studio language code."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["userId", "displayName", "preferredLanguage", "createdAt", "updatedAt"]
+    },
+    "CloudBrandKit": {
+      "title": "CloudBrandKit",
+      "description": "Channel branding settings synced optionally to Firestore.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "channelName": { "type": "string" },
+        "primaryColorHex": { "type": "string" },
+        "accentColorHex": { "type": "string" },
+        "fontFamily": { "type": "string" },
+        "watermarkText": { "type": "string" },
+        "watermarkEnabled": { "type": "boolean" },
+        "defaultAspectRatio": { "type": "string", "enum": ["9:16", "16:9", "1:1", "custom"] },
+        "defaultCaptionStyle": { "type": "string" },
+        "applyByDefault": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "channelName",
+        "primaryColorHex",
+        "accentColorHex",
+        "fontFamily",
+        "watermarkText",
+        "watermarkEnabled",
+        "defaultAspectRatio",
+        "defaultCaptionStyle",
+        "applyByDefault",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CloudProjectBackup": {
+      "title": "CloudProjectBackup",
+      "description": "Structured backup of a video project script, scenes, and SEO metadata.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "topic": { "type": "string" },
+        "aspectRatio": { "type": "string", "enum": ["9:16", "16:9", "1:1", "custom"] },
+        "targetDurationSec": { "type": "integer" },
+        "languageCode": { "type": "string", "enum": ["en", "hi"] },
+        "scriptHook": { "type": "string" },
+        "scriptBody": { "type": "string" },
+        "scriptCta": { "type": "string" },
+        "sceneSummaries": { "type": "array" },
+        "seoTitle": { "type": "string" },
+        "seoDescription": { "type": "string" },
+        "seoTags": { "type": "array" },
+        "status": { "type": "string", "enum": ["DRAFT", "READY", "EXPORTED", "UPLOADED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "title",
+        "topic",
+        "aspectRatio",
+        "targetDurationSec",
+        "languageCode",
+        "scriptHook",
+        "scriptBody",
+        "scriptCta",
+        "sceneSummaries",
+        "seoTitle",
+        "seoDescription",
+        "seoTags",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CloudScheduledUpload": {
+      "title": "CloudScheduledUpload",
+      "description": "Cloud-synced record of a scheduled or completed YouTube upload.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "projectTitle": { "type": "string" },
+        "videoTitle": { "type": "string" },
+        "visibility": { "type": "string", "enum": ["private", "unlisted", "public"] },
+        "scheduledAtMillis": { "type": "integer" },
+        "status": { "type": "string", "enum": ["QUEUED", "PAUSED", "UPLOADING", "COMPLETED", "FAILED", "CANCELLED"] },
+        "youtubeVideoId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "projectId",
+        "projectTitle",
+        "videoTitle",
+        "visibility",
+        "scheduledAtMillis",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserStudioProfile" },
+      "description": "User studio profile document."
+    },
+    "/users/{userId}/brandKits/{kitId}": {
+      "schema": { "$ref": "#/entities/CloudBrandKit" },
+      "description": "User channel brand kits."
+    },
+    "/users/{userId}/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/CloudProjectBackup" },
+      "description": "User-owned cloud project backups."
+    },
+    "/users/{userId}/scheduledUploads/{uploadId}": {
+      "schema": { "$ref": "#/entities/CloudScheduledUpload" },
+      "description": "User-owned scheduled YouTube upload queue records."
+    }
+  }
+}
